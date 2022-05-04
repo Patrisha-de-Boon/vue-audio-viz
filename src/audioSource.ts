@@ -18,7 +18,8 @@ export function getShelfValues(audioContext: AudioContext) {
 export class AudioSource {
     playing = false;
     ended = false;
-    startTime: number;
+    startTime = 0;
+    pauseTime = 0;
     freqBins: number[];
     bufferSource: AudioBufferSourceNode;
     eqNodes: BiquadFilterNode[] = [];
@@ -35,7 +36,6 @@ export class AudioSource {
         this.buffer = buffer;
         this.onended = onended;
         this.mute = mute;
-        this.startTime = Date.now();
 
         this.freqBins = helper.freqBins;
 
@@ -47,42 +47,41 @@ export class AudioSource {
     }
 
     setBufferSource(fromConstructor = false) {
-        if (!fromConstructor) {
+        if (fromConstructor) {
+            const shelfValues = getShelfValues(this.audioContext);
+            this.gainNode.connect(shelfValues.lowshelf);
+
+            this.eqNodes = [];
+            this.eqNodes.push(shelfValues.lowshelf);
+            this.gainNode.connect(shelfValues.lowshelf);
+
+            let chainLink = shelfValues.lowshelf;
+            for (let f = 0; f < helper.centerFreqs.length; f++) {
+                const eq = this.audioContext.createBiquadFilter();
+                eq.type = 'peaking';
+                eq.frequency.value = helper.centerFreqs[f];
+                eq.Q.value = helper.qFactors[f];
+                this.eqNodes.push(eq);
+                chainLink.connect(eq);
+                chainLink = eq;
+            }
+            this.eqNodes.push(shelfValues.highshelf);
+            chainLink.connect(shelfValues.highshelf);
+
+            shelfValues.highshelf.connect(this.analyser);
+            if (!this.mute) {
+                this.analyser.connect(this.audioContext.destination);
+            }
+            this.analyser.fftSize = 8192;
+            this.analyser.smoothingTimeConstant = 0;
+            this.analyser.maxDecibels = -10;
+        } else {
             // These are seperated so eslint can see the definitions in the constructor
             this.bufferSource = this.audioContext.createBufferSource();
-            this.analyser = this.audioContext.createAnalyser();
-            this.gainNode = this.audioContext.createGain();
+            // this.analyser = this.audioContext.createAnalyser();
+            // this.gainNode = this.audioContext.createGain();
         }
-
         this.bufferSource.connect(this.gainNode);
-
-        const shelfValues = getShelfValues(this.audioContext);
-        this.gainNode.connect(shelfValues.lowshelf);
-
-        this.eqNodes = [];
-        this.eqNodes.push(shelfValues.lowshelf);
-        this.gainNode.connect(shelfValues.lowshelf);
-
-        let chainLink = shelfValues.lowshelf;
-        for (let f = 0; f < helper.centerFreqs.length; f++) {
-            const eq = this.audioContext.createBiquadFilter();
-            eq.type = 'peaking';
-            eq.frequency.value = helper.centerFreqs[f];
-            eq.Q.value = helper.qFactors[f];
-            this.eqNodes.push(eq);
-            chainLink.connect(eq);
-            chainLink = eq;
-        }
-        this.eqNodes.push(shelfValues.highshelf);
-        chainLink.connect(shelfValues.highshelf);
-
-        shelfValues.highshelf.connect(this.analyser);
-        if (!this.mute) {
-            this.analyser.connect(this.audioContext.destination);
-        }
-        this.analyser.fftSize = 8192;
-        this.analyser.smoothingTimeConstant = 0;
-        this.analyser.maxDecibels = -10;
         this.bufferSource.buffer = this.buffer;
 
         this.bufferSource.onended = (function (this: AudioSource) {
@@ -127,11 +126,27 @@ export class AudioSource {
                 this.setBufferSource();
             }
 
+            if (this.pauseTime) {
+                this.bufferSource.start(0, this.pauseTime / 1000);
+                this.startTime = Date.now() - this.pauseTime;
+            } else {
+                this.bufferSource.start(0);
+                this.startTime = Date.now();
+            }
+
             this.setGain(this.volume);
-            this.bufferSource.start(0);
-            this.startTime = Date.now();
+            this.pauseTime = 0;
             this.playing = true;
             this.ended = false;
+        }
+    }
+
+    pause() {
+        if (this.playing) {
+            this.ended = true;
+            this.playing = false;
+            this.bufferSource.stop(0);
+            this.pauseTime = Date.now() - this.startTime;
         }
     }
 
@@ -156,7 +171,12 @@ export class AudioSource {
     }
 
     stop() {
-        this.bufferSource.stop(0);
+        if (this.playing) {
+            this.playing = false;
+            this.ended = true;
+            this.bufferSource.stop(0);
+            this.startTime = 0;
+        }
         d3.select('#currentTime').text('--:--');
     }
 

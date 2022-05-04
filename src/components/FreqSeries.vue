@@ -1,5 +1,21 @@
 <template>
     <g>
+        <g v-if="invert">
+            <g
+                v-for="(freq, i) in stableFreqArray"
+                :key="i + '-' + freq"
+            >
+                <StandardBar
+                    :height="yScale(freq) ?? 0"
+                    :width="barWidth"
+                    :x="xScale(i) ?? 0"
+                    :y="invert ? height / 2 : 0"
+                    :invert="true"
+                    :chart-height="invert ? height / 2 : height"
+                    :fill="colourScale(freq)"
+                />
+            </g>
+        </g>
         <g
             v-for="(freq, i) in freqArray"
             :key="i + '-' + freq + '-' + eqNodes[i]"
@@ -8,17 +24,17 @@
                 :height="yScale(freq) ?? 0"
                 :width="barWidth"
                 :x="xScale(i) ?? 0"
-                :invert="invert"
-                :chart-height="height"
+                :y="0"
+                :invert="false"
+                :chart-height="invert ? height / 2 : height"
                 :fill="colourScale(freq)"
             />
             <EqualizerBar
-                v-if="useEq"
                 :height="height ?? 0"
                 :width="barWidth"
                 :x="xScale(i) ?? 1"
                 :chart-height="height"
-                :fill="colourScale(freq)"
+                :fill="eqColour"
                 :eq="getEQ(i)"
                 @change="(gain: number) => emit('change', { gain: gain, index: i})"
             />
@@ -36,12 +52,12 @@ import * as helper from '../helper';
 
 const props = defineProps<{
     freqArray: number[];
+    stableFreqArray: number[];
     height: number;
     width: number;
     eqColour: string;
     lowColour: string;
     highColour: string;
-    useEq: boolean;
     audioContext: AudioContext;
     eqNodes: BiquadFilterNode[];
     invert: boolean;
@@ -76,10 +92,10 @@ watch(() => props.width, () => {
     barWidth.value = xScale.value.bandwidth() ?? 0;
 });
 
-watch(() => props.height, () => {
+watch(() => props.height || props.invert, () => {
     yScale.value = d3.scaleLinear()
         .domain([0, 255])
-        .range([0, props.height]);
+        .range([0, props.invert ? props.height / 2 : props.height]);
 });
 
 watch(() => props.lowColour || props.highColour, () => {

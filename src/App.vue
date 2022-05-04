@@ -19,7 +19,7 @@
                     :disabled="!currentSource"
                     @click="onPlayClicked"
                 >
-                    Play
+                    {{ playing ? "Pause" : "Play" }}
                 </button>
             </div>
             <div
@@ -48,38 +48,21 @@
             </div>
         </div>
 
-        <div id="vizContainer">
-            <div id="visualizer">
-                <AudioVisualizer
-                    :width="vizWidth"
-                    :height="vizHeight / 2"
-                    :high-colour="highColour"
-                    :low-colour="lowColour"
-                    :eq-colour="eqColour"
-                    :audio-context="(audioContext as AudioContext)"
-                    :audio-source="currentSource"
-                    :use-eq="true"
-                    :invert="false"
-                    :playing="playing"
-                    :eq-nodes="eqNodes"
-                    @change="onEqChange"
-                />
-            </div>
-            <div id="visualizerInverted">
-                <AudioVisualizer
-                    :width="vizWidth"
-                    :height="vizHeight / 2"
-                    :high-colour="highColour"
-                    :low-colour="lowColour"
-                    :eq-colour="eqColour"
-                    :audio-context="(audioContext as AudioContext)"
-                    :audio-source="currentStaticSource"
-                    :use-eq="false"
-                    :invert="true"
-                    :playing="playing"
-                    :eq-nodes="[]"
-                />
-            </div>
+        <div id="visualizer">
+            <AudioVisualizer
+                :width="vizWidth"
+                :height="vizHeight"
+                :high-colour="highColour"
+                :low-colour="lowColour"
+                :eq-colour="eqColour"
+                :audio-context="(audioContext as AudioContext)"
+                :audio-source="currentSource"
+                :audio-stable-source="currentStableSource"
+                :invert="true"
+                :playing="playing"
+                :eq-nodes="eqNodes"
+                @change="onEqChange"
+            />
         </div>
         <div
             id="metadata"
@@ -90,8 +73,7 @@
             <div id="album" />
             <div id="time">
                 <div id="currentTime">
-                    {{ !currentSource || currentSource.ended || !currentSource?.playing ? '--:--'
-                        : helper.secondsFormat((Date.now() - currentSource.getStartTime()) / 1000) }}
+                    --:--
                 </div>
                 /
                 <div id="totalTime" />
@@ -119,12 +101,12 @@ const volumeWidth = ref(1);
 // const currentTime = ref('--:--');
 const audioContext: Ref<AudioContext | null> = ref(null);
 const currentSource: Ref<AudioSource | null> = ref(null);
-const currentStaticSource: Ref<AudioSource | null> = ref(null);
+const currentStableSource: Ref<AudioSource | null> = ref(null);
 const playing = ref(false);
 const eqNodes: Ref<BiquadFilterNode[]> = ref([]);
 
 onMounted(() => {
-    vizHeight.value = (d3.select('#vizContainer').node() as HTMLElement)?.getBoundingClientRect().height;
+    vizHeight.value = (d3.select('#visualizer').node() as HTMLElement)?.getBoundingClientRect().height;
     vizWidth.value = (d3.select('body').node() as HTMLElement)?.getBoundingClientRect().width;
     volumeWidth.value = (d3.select('#topPanel').node() as Element).getBoundingClientRect().width / 2 ?? 0;
 });
@@ -149,17 +131,18 @@ function onVolumeChange(volume: number) {
 
 function onPlayClicked() {
     if (currentSource.value) {
-        currentSource.value.play();
-        playing.value = true;
-        // const visualizerRef = ref();
-        // (visualizerRef.value as typeof AudioVisualizer)?.play(() => {
-        //     d3.select('#currentTime').text((currentSource.value as AudioSource).ended ? '--:--'
-        //         : secondsFormat((Date.now() - (currentSource.value as AudioSource).getStartTime()) / 1000));
-        // });
+        if (playing.value === true) {
+            currentSource.value.pause();
+            playing.value = false;
+        } else {
+            currentSource.value.play();
+            playing.value = true;
+            eqNodes.value = currentSource.value.eqNodes;
+        }
     }
 
-    if (currentStaticSource.value) {
-        currentStaticSource.value.play();
+    if (currentStableSource.value) {
+        currentStableSource.value.play();
     }
 }
 
@@ -172,10 +155,10 @@ function onFileChange(files: FileList | null) {
         if (currentSource.value !== undefined && currentSource.value !== null && currentSource.value.isPlaying()) {
             currentSource.value.bufferSource.onended = function () {
                 currentSource.value?.end();
-                currentStaticSource.value?.end();
+                currentStableSource.value?.end();
             };
             currentSource.value.stop();
-            currentStaticSource.value?.stop();
+            currentStableSource.value?.stop();
         }
     } else if (currentFile !== files[0]) {
         currentFile = files[0];
@@ -201,15 +184,15 @@ function onFileChange(files: FileList | null) {
                             currentSource.value?.end();
                             currentSource.value = audioSource;
 
-                            currentStaticSource.value?.end();
-                            currentStaticSource.value = audioSource2;
+                            currentStableSource.value?.end();
+                            currentStableSource.value = audioSource2;
                             onPlayClicked();
                         };
                         currentSource.value.stop();
-                        currentStaticSource.value?.stop();
+                        currentStableSource.value?.stop();
                     } else {
                         currentSource.value = audioSource;
-                        currentStaticSource.value = audioSource2;
+                        currentStableSource.value = audioSource2;
                         eqNodes.value = audioSource.eqNodes;
                         onPlayClicked();
                     }
@@ -323,31 +306,20 @@ function onResetEqClicked() {
   pointer-events: none;
 }
 
-#vizContainer {
+#visualizer {
   height: 95%;
   width: 100%;
-}
-
-#visualizer {
-  position: absolute;
-  top: 0;
-  left: 0;
-}
-
-#visualizerInverted {
   position: absolute;
   bottom: 0;
   left: 0;
 }
 
-#visualizer svg,
-#visualizerInverted svg {
+#visualizer svg{
   display: block;
   pointer-events: none;
 }
 
-#visualizer svg *,
-#visualizerInverted svg * {
+#visualizer svg * {
   pointer-events: all;
 }
 

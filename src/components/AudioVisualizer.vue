@@ -5,12 +5,12 @@
     >
         <FreqSeries
             :freq-array="freqArray"
+            :stable-freq-array="stableFreqArray"
             :width="width ?? 0"
             :height="height ?? 0"
             :high-colour="highColour"
             :low-colour="lowColour"
             :eq-colour="eqColour"
-            :use-eq="useEq"
             :audio-context="audioContext"
             :eq-nodes="eqNodes"
             :invert="invert"
@@ -32,9 +32,9 @@ const props = defineProps<{
   eqColour: string;
   lowColour: string;
   highColour: string;
-  audioSource: AudioSource | null;
   audioContext: AudioContext;
-  useEq: boolean;
+  audioSource: AudioSource | null;
+  audioStableSource: AudioSource | null;
   playing: boolean;
   eqNodes: BiquadFilterNode[];
   invert: boolean;
@@ -45,14 +45,18 @@ const emit = defineEmits<{
 }>();
 
 const freqArray: Ref<number[]> = ref([]);
+const stableFreqArray: Ref<number[]> = ref([]);
 
 function refreshArray() {
-    if (props.audioSource) {
+    if (props.audioSource && props.audioSource.playing) {
         freqArray.value = props.audioSource.getFreqArray();
 
-        // This is faster than trying to make vue update through refs every second.
-        d3.select('#currentTime').text(props.audioSource.ended ? '--:--'
-            : helper.secondsFormat((Date.now() - props.audioSource.getStartTime()) / 1000));
+        // This is more reliable than trying to make vue update through refs every second.
+        d3.select('#currentTime').text(helper.secondsFormat((Date.now() - props.audioSource.getStartTime()) / 1000));
+    }
+
+    if (props.audioStableSource) {
+        stableFreqArray.value = props.audioStableSource.getFreqArray();
     }
 
     if (props.playing) {

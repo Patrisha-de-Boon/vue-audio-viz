@@ -5,7 +5,7 @@
         :width="width ?? 0"
         :height="height ?? 0"
         :x="x"
-        :y="invert ? 0 : chartHeight - height"
+        :y="y + (invert ? 0 : chartHeight - height)"
     />
 </template>
 
@@ -15,6 +15,7 @@ defineProps<{
   height: number;
   chartHeight: number;
   x: number;
+  y: number;
   fill: string;
   invert: boolean;
 }>();
