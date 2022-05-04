@@ -1,14 +1,14 @@
 import * as d3 from 'd3';
-import * as constants from './constants';
+import * as helper from './helper';
 
 export function getShelfValues(audioContext: AudioContext) {
     const lowshelf = audioContext.createBiquadFilter();
     lowshelf.type = 'lowshelf'; // surprise!
-    lowshelf.frequency.value = constants.lowShelfFreq;
+    lowshelf.frequency.value = helper.lowShelfFreq;
 
     const highshelf = audioContext.createBiquadFilter();
     highshelf.type = 'highshelf';
-    highshelf.frequency.value = constants.highShelfFreq;
+    highshelf.frequency.value = helper.highShelfFreq;
     return {
         lowshelf,
         highshelf
@@ -17,34 +17,77 @@ export function getShelfValues(audioContext: AudioContext) {
 
 export class AudioSource {
     playing = false;
+    ended = false;
     startTime: number;
     freqBins: number[];
     bufferSource: AudioBufferSourceNode;
+    eqNodes: BiquadFilterNode[] = [];
     analyser: AnalyserNode;
     gainNode: GainNode;
-    globalVolume = 100;
+    volume = 1;
+    audioContext: AudioContext;
+    buffer: AudioBuffer;
+    onended: () => void;
+    mute: boolean;
 
-    public constructor(buffer: AudioBuffer, audioContext: AudioContext) {
+    public constructor(buffer: AudioBuffer, audioContext: AudioContext, onended: () => void, mute = false) {
+        this.audioContext = audioContext;
+        this.buffer = buffer;
+        this.onended = onended;
+        this.mute = mute;
         this.startTime = Date.now();
 
-        this.freqBins = constants.freqBins;
-        this.bufferSource = audioContext.createBufferSource();
-        this.analyser = audioContext.createAnalyser();
-        this.gainNode = audioContext.createGain();
+        this.freqBins = helper.freqBins;
+
+        this.bufferSource = this.audioContext.createBufferSource();
+        this.analyser = this.audioContext.createAnalyser();
+        this.gainNode = this.audioContext.createGain();
+
+        this.setBufferSource(true);
+    }
+
+    setBufferSource(fromConstructor = false) {
+        if (!fromConstructor) {
+            // These are seperated so eslint can see the definitions in the constructor
+            this.bufferSource = this.audioContext.createBufferSource();
+            this.analyser = this.audioContext.createAnalyser();
+            this.gainNode = this.audioContext.createGain();
+        }
+
         this.bufferSource.connect(this.gainNode);
 
-        const shelfValues = getShelfValues(audioContext);
+        const shelfValues = getShelfValues(this.audioContext);
         this.gainNode.connect(shelfValues.lowshelf);
 
+        this.eqNodes = [];
+        this.eqNodes.push(shelfValues.lowshelf);
+        this.gainNode.connect(shelfValues.lowshelf);
+
+        let chainLink = shelfValues.lowshelf;
+        for (let f = 0; f < helper.centerFreqs.length; f++) {
+            const eq = this.audioContext.createBiquadFilter();
+            eq.type = 'peaking';
+            eq.frequency.value = helper.centerFreqs[f];
+            eq.Q.value = helper.qFactors[f];
+            this.eqNodes.push(eq);
+            chainLink.connect(eq);
+            chainLink = eq;
+        }
+        this.eqNodes.push(shelfValues.highshelf);
+        chainLink.connect(shelfValues.highshelf);
+
         shelfValues.highshelf.connect(this.analyser);
-        this.analyser.connect(audioContext.destination);
+        if (!this.mute) {
+            this.analyser.connect(this.audioContext.destination);
+        }
         this.analyser.fftSize = 8192;
         this.analyser.smoothingTimeConstant = 0;
         this.analyser.maxDecibels = -10;
-        this.bufferSource.buffer = buffer;
+        this.bufferSource.buffer = this.buffer;
 
         this.bufferSource.onended = (function (this: AudioSource) {
             this.end();
+            this.onended();
         }).bind(this);
     }
 
@@ -69,19 +112,27 @@ export class AudioSource {
     }
 
     getVolume() {
-        return this.globalVolume;
+        return this.volume;
     }
 
     setVolume(volume: number) {
-        this.globalVolume = volume;
+        this.volume = volume;
+        this.setGain(this.volume);
     }
 
     play() {
-        this.setGain(this.globalVolume);
-        this.bufferSource.start(0);
-        this.startTime = Date.now();
-        this.playing = true;
-        this.getFreqArray();
+        if (!this.playing) {
+            if (this.ended) {
+                // can't call bufferSource.start more than once on the same buffer source.
+                this.setBufferSource();
+            }
+
+            this.setGain(this.volume);
+            this.bufferSource.start(0);
+            this.startTime = Date.now();
+            this.playing = true;
+            this.ended = false;
+        }
     }
 
     getFreqArray(): number[] {
@@ -98,11 +149,6 @@ export class AudioSource {
 
                 freqArray.push(Math.floor(d3.mean(values) ?? 0));
             }
-
-            // draw(freqArray);
-            // setTimeout(() => {
-            //     this.getFreqArray();
-            // }, 10);
             return freqArray;
         }
 
@@ -111,12 +157,11 @@ export class AudioSource {
 
     stop() {
         this.bufferSource.stop(0);
-        // d3.select('#currentTime').text('--:--');
+        d3.select('#currentTime').text('--:--');
     }
 
     end() {
         this.playing = false;
-        // const arr = new Uint8Array(this.analyser.frequencyBinCount);
-        // draw(arr, true);
+        this.ended = true;
     }
 }

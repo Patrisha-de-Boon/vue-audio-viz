@@ -1,11 +1,11 @@
 <template>
     <rect
         class-name="bar"
-        fill="{{fill}}"
-        width="{{width}}"
-        height="{{height}}"
-        x="{{x}}"
-        y="{{chartHeight - height}}"
+        :fill="fill"
+        :width="width ?? 0"
+        :height="height ?? 0"
+        :x="x"
+        :y="invert ? 0 : chartHeight - height"
     />
 </template>
 
@@ -13,7 +13,10 @@
 defineProps<{
   width: number;
   height: number;
+  chartHeight: number;
+  x: number;
   fill: string;
+  invert: boolean;
 }>();
 </script>
 

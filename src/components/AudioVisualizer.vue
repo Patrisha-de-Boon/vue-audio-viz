@@ -1,66 +1,82 @@
 <template>
-    <BarChart
-        :width="width"
-        :height="height"
+    <svg
+        :width="width ?? 0"
+        :height="height ?? 0"
     >
         <FreqSeries
-            :data="freqArray"
-            :width="width"
-            :height="height"
+            :freq-array="freqArray"
+            :width="width ?? 0"
+            :height="height ?? 0"
             :high-colour="highColour"
             :low-colour="lowColour"
             :eq-colour="eqColour"
             :use-eq="useEq"
             :audio-context="audioContext"
+            :eq-nodes="eqNodes"
+            :invert="invert"
+            @change="(event) => emit('change', event)"
         />
-    </BarChart>
+    </svg>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import * as d3 from 'd3';
+import { ref, watch, type Ref } from 'vue';
 import type { AudioSource } from '@/audioSource';
-import BarChart from './BarChart.vue';
-import FreqSeries from './FreqSeries/FreqSeries.vue';
+import FreqSeries from './FreqSeries.vue';
+import * as helper from '../helper';
 
 const props = defineProps<{
   height: number;
   width: number;
-  eqColour: string
+  eqColour: string;
   lowColour: string;
   highColour: string;
   audioSource: AudioSource | null;
   audioContext: AudioContext;
   useEq: boolean;
+  playing: boolean;
+  eqNodes: BiquadFilterNode[];
+  invert: boolean;
 }>();
 
-let isPlaying = false;
-let freqArray: number[] = [];
+const emit = defineEmits<{
+    (e: 'change', event: { gain: number, index: number }): void
+}>();
+
+const freqArray: Ref<number[]> = ref([]);
 
 function refreshArray() {
     if (props.audioSource) {
-        freqArray = props.audioSource.getFreqArray();
+        freqArray.value = props.audioSource.getFreqArray();
+
+        // This is faster than trying to make vue update through refs every second.
+        d3.select('#currentTime').text(props.audioSource.ended ? '--:--'
+            : helper.secondsFormat((Date.now() - props.audioSource.getStartTime()) / 1000));
     }
 
-    if (isPlaying) {
+    if (props.playing) {
         setTimeout(() => {
             refreshArray();
         }, 10);
     }
 }
 
-function play() {
-    isPlaying = true;
-    refreshArray();
-}
+watch(() => props.playing, (newValue, oldvalue) => {
+    if (newValue && !oldvalue) {
+        refreshArray();
+    }
+});
 
-play();
-
-function resetEQ() {
-    const childComponentRef = ref<typeof FreqSeries>();
-    childComponentRef.value?.resetEQ();
-}
-
-function end() {
-    isPlaying = false;
-}
+watch(() => props.eqNodes, () => {
+    if (freqArray.value) {
+        // change each value in freq array so it is greater than
+        // 0 so vue updates correctly
+        freqArray.value.forEach((x, i, arr) => {
+            if (x === 0) {
+                arr[i] = 1;
+            }
+        });
+    }
+});
 </script>

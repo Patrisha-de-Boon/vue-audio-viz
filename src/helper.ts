@@ -1,3 +1,5 @@
+import * as d3 from 'd3';
+
 export const centerFreqs = [53.8, 64.6, 75.4, 88.8, 102.3, 118.4, 140, 164.2, 191.1, 223.4, 261.1,
     306.8, 360.7, 419.9, 492.6, 576, 672.9, 788.7, 923.2, 1079.4, 1262.4, 1477.7,
     1728, 2021.4, 2366, 2769.7, 3240.7, 3792.5, 4438.5, 5192.2, 6077.7, 7114,
@@ -14,3 +16,7 @@ export const freqBins = [8, 10, 12, 14, 17, 19, 23, 27, 32, 37, 44, 51, 61, 71, 
 export const lowShelfFreq = 48.5;
 
 export const highShelfFreq = 23051.3;
+
+export function secondsFormat(seconds: number) {
+    return `${Math.floor(seconds / 60)}:${d3.format('02d')(Math.floor(seconds % 60))}`;
+}
