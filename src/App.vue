@@ -1,55 +1,74 @@
 <template>
-    <main class="fullscreen">
-        <div id="topPanel">
-            <div
-                id="chooser"
-                class="noselect"
+    <header id="topPanel">
+        <div
+            id="chooser"
+            class="noselect"
+        >
+            <FileSelector
+                text="Choose a song"
+                @change="onFileChange"
+            />
+        </div>
+        <div
+            id="play"
+            class="noselect"
+        >
+            <button
+                id="playButton"
+                :disabled="!currentSource"
+                @click="onPlayClicked"
             >
-                <FileSelector
-                    text="Choose a song"
-                    @change="onFileChange"
-                />
-            </div>
-            <div
-                id="play"
-                class="noselect"
+                {{ playing ? "Pause" : "Play" }}
+            </button>
+        </div>
+        <div
+            id="resetEQ"
+            class="noselect"
+        >
+            <button
+                id="resetEQButton"
+                :disabled="!currentSource"
+                @click="onResetEqClicked"
             >
-                <button
-                    id="playButton"
-                    :disabled="!currentSource"
-                    @click="onPlayClicked"
-                >
-                    {{ playing ? "Pause" : "Play" }}
-                </button>
-            </div>
-            <div
-                id="resetEQ"
-                class="noselect"
-            >
-                <button
-                    id="resetEQButton"
-                    :disabled="!currentSource"
-                    @click="onResetEqClicked"
-                >
-                    Reset EQ
-                </button>
-            </div>
-            <div
-                id="volume"
-                class="noselect"
-            >
-                <VolumeSlider
-                    :width="((d3.select('#topPanel').node() as Element)?.getBoundingClientRect().width ?? 0) / 2"
-                    :height="(d3.select('#topPanel').node() as Element)?.getBoundingClientRect().height ?? 0"
-                    :current-width="volumeWidth"
-                    :fill="highColour"
-                    @change="onVolumeChange"
-                />
-            </div>
+                Reset EQ
+            </button>
+        </div>
+        <div
+            id="volume"
+            class="noselect"
+        >
+            <VolumeSlider
+                :width="((d3.select('#topPanel').node() as Element)?.getBoundingClientRect().width ?? 0) / 2"
+                :height="(d3.select('#topPanel').node() as Element)?.getBoundingClientRect().height ?? 0"
+                :current-width="volumeWidth"
+                :fill="highColour"
+                @change="onVolumeChange"
+            />
+        </div>
+    </header>
+
+    <main
+        id="bottomPanel"
+    >
+        <div
+            id="playlist"
+            class="noselect"
+        >
+            <PlayList
+                :files="audioFiles"
+                :removed-files="removedFiles"
+                :selected="currentFile"
+                :selected-color="highColour"
+                @select="onFileSelect"
+                @remove="onFileRemove"
+            />
         </div>
 
-        <div id="visualizer">
+        <div
+            id="visContainer"
+        >
             <AudioVisualizer
+                id="visualizer"
                 :width="vizWidth"
                 :height="vizHeight"
                 :high-colour="highColour"
@@ -68,15 +87,36 @@
             id="metadata"
             class="noselect"
         >
-            <div id="title" />
-            <div id="artist" />
-            <div id="album" />
-            <div id="time">
-                <div id="currentTime">
-                    --:--
+            <div id="textdata">
+                <div id="title">
+                    {{ currentFile?.title ?? '' }}
                 </div>
-                /
-                <div id="totalTime" />
+                <div id="artist">
+                    {{ currentFile?.artist ?? '' }}
+                </div>
+                <div id="album">
+                    {{ currentFile?.album ?? '' }}
+                </div>
+                <div id="time">
+                    <div id="currentTime">
+                        --:--
+                    </div>
+                    /
+                    <div id="totalTime">
+                        {{ currentFile?.duration ? helper.secondsFormat(currentFile.duration) : '' }}
+                    </div>
+                </div>
+            </div>
+            <div
+                id="pictureFrame"
+                v-square-directive="'height'"
+            >
+                <img
+                    v-if="currentFile?.picture"
+                    id="picture"
+                    :src="currentFile?.picture"
+                    alt=""
+                >
             </div>
         </div>
     </main>
@@ -84,37 +124,43 @@
 
 <script setup lang="ts">
 import * as d3 from 'd3';
-// import * as musicMetadata from 'music-metadata-browser';
 import { ref, onMounted, type Ref } from 'vue';
 import FileSelector from './components/FileSelector.vue';
 import AudioVisualizer from './components/AudioVisualizer.vue';
 import { AudioSource } from './audioSource';
 import * as helper from './helper';
 import VolumeSlider from './components/VolumeSlider.vue';
+import type { AudioFile } from './models/audioFile';
+import PlayList from './components/PlayList.vue';
+import { squareDirective as vSquareDirective } from './helper';
 
+let parseAudioMetadata: ((file: any) => Promise<any>) | null = null;
 const highColour = 'rgb(149,101,196)';
 const lowColour = 'rgb(109,58,171)';
 const eqColour = 'rgb(86,101,199)';
 const vizHeight = ref(0);
 const vizWidth = ref(0);
 const volumeWidth = ref(1);
-// const currentTime = ref('--:--');
 const audioContext: Ref<AudioContext | null> = ref(null);
 const currentSource: Ref<AudioSource | null> = ref(null);
 const currentStableSource: Ref<AudioSource | null> = ref(null);
+const currentFile: Ref<AudioFile | null> = ref(null);
 const playing = ref(false);
 const eqNodes: Ref<BiquadFilterNode[]> = ref([]);
+const audioFiles: Ref<AudioFile[]> = ref([]);
+const removedFiles: Ref<AudioFile[]> = ref([]);
 
-onMounted(() => {
+onMounted(async () => {
     vizHeight.value = (d3.select('#visualizer').node() as HTMLElement)?.getBoundingClientRect().height;
-    vizWidth.value = (d3.select('body').node() as HTMLElement)?.getBoundingClientRect().width;
+    vizWidth.value = (d3.select('#visualizer').node() as HTMLElement)?.getBoundingClientRect().width;
     volumeWidth.value = (d3.select('#topPanel').node() as Element).getBoundingClientRect().width / 2 ?? 0;
+    // @ts-ignore: This module doesn't have type declarations so it is implicitly 'any'
+    const { default: parseFunction } = await import('parse-audio-metadata');
+    parseAudioMetadata = parseFunction;
 });
 
 (window as any).audioContext = (window as any).AudioContext || (window as any).webkitAudioContext
                         || (window as any).mozAudioContext || (window as any).msAudioContext;
-
-let currentFile: File | null = null;
 
 function onEqChange(event: {gain: number, index: number}) {
     if (event && (event.gain || event.gain === 0) && event.index >= 0 && eqNodes.value && eqNodes.value.length > event.index) {
@@ -127,6 +173,10 @@ function onVolumeChange(volume: number) {
     if (currentSource.value) {
         currentSource.value.setVolume(volume);
     }
+}
+
+function onFileRemove(file: AudioFile) {
+    removedFiles.value = [file];
 }
 
 function onPlayClicked() {
@@ -146,12 +196,8 @@ function onPlayClicked() {
     }
 }
 
-function onFileChange(files: FileList | null) {
-    if (audioContext.value == null) {
-        audioContext.value = new AudioContext();
-    }
-
-    if (files == null || files.length < 1) {
+function onFileSelect(file: AudioFile | null) {
+    if (file == null) {
         if (currentSource.value !== undefined && currentSource.value !== null && currentSource.value.isPlaying()) {
             currentSource.value.bufferSource.onended = function () {
                 currentSource.value?.end();
@@ -160,24 +206,24 @@ function onFileChange(files: FileList | null) {
             currentSource.value.stop();
             currentStableSource.value?.stop();
         }
-    } else if (currentFile !== files[0]) {
-        currentFile = files[0];
+    } else if (currentFile.value !== file) {
+        currentFile.value = file;
 
         const fr = new FileReader();
         fr.onload = function (e) {
             if (e && e.target && e.target.result && audioContext.value) {
-                audioContext.value.decodeAudioData(e.target.result as ArrayBuffer, async (buffer) => {
-                    // Get metadata and fill in the divs
-                    // const metadata = await musicMetadata.parseBlob(currentFile as Blob);
-                    // d3.select('#title').text(metadata.common.title ?? 'Unknown');
-                    // d3.select('#artist').text(metadata.common.artist ?? 'Unknown');
-                    // d3.select('#album').text(metadata.common.album ?? 'Unknown');
-
+                audioContext.value.decodeAudioData(e.target.result as ArrayBuffer, (buffer) => {
                     d3.selectAll('#time, #currentTime, #totalTime').style('display', 'inline');
-                    d3.select('#totalTime').text(helper.secondsFormat(buffer.duration));
 
-                    // const visualizerRef = ref<typeof AudioVisualizer>();
-                    const audioSource = new AudioSource(buffer, audioContext.value as AudioContext, () => { playing.value = false; });
+                    const audioSource = new AudioSource(buffer, audioContext.value as AudioContext, () => {
+                        if (audioSource.pauseTime === 0) {
+                            playing.value = false;
+                            const i = audioFiles.value.findIndex(x => x === currentFile.value);
+                            if (i >= 0 && i < audioFiles.value.length - 1) {
+                                onFileSelect(audioFiles.value[i + 1]);
+                            }
+                        }
+                    });
                     const audioSource2 = new AudioSource(buffer, audioContext.value as AudioContext, () => {}, true);
                     if (currentSource.value !== undefined && currentSource.value !== null && currentSource.value.isPlaying()) {
                         currentSource.value.bufferSource.onended = function () {
@@ -186,6 +232,7 @@ function onFileChange(files: FileList | null) {
 
                             currentStableSource.value?.end();
                             currentStableSource.value = audioSource2;
+                            playing.value = false;
                             onPlayClicked();
                         };
                         currentSource.value.stop();
@@ -194,13 +241,49 @@ function onFileChange(files: FileList | null) {
                         currentSource.value = audioSource;
                         currentStableSource.value = audioSource2;
                         eqNodes.value = audioSource.eqNodes;
+                        playing.value = false;
                         onPlayClicked();
                     }
                 });
             }
         };
 
-        fr.readAsArrayBuffer(currentFile);
+        fr.readAsArrayBuffer(file);
+    }
+}
+
+function onFileChange(files: FileList | null) {
+    if (audioContext.value == null) {
+        audioContext.value = new AudioContext();
+    }
+
+    if (files && files.length > 0 && files[0]) {
+        [...files].forEach((file) => {
+            if (file) {
+                const urlFr = new FileReader();
+                urlFr.onload = async function (e) {
+                    if (e && e.target && e.target.result && parseAudioMetadata) {
+                        const metadata = await parseAudioMetadata(file);
+                        const audioFile = file as AudioFile;
+                        audioFile.title = metadata.title;
+                        audioFile.album = metadata.album;
+                        audioFile.artist = metadata.artist;
+                        audioFile.duration = metadata.duration;
+                        audioFile.picture = metadata.picture ? URL.createObjectURL(metadata.picture) : undefined;
+                        audioFile.key = `${audioFile?.title}-${audioFile?.album}-${audioFile?.artist}`;
+                        const existing = audioFiles.value.findIndex(x => x.title === audioFile.title && x.album === audioFile.album && x.artist === audioFile.artist);
+                        if (!(existing >= 0)) {
+                            audioFiles.value.push(audioFile);
+                        } else if (audioFiles.value[existing] !== currentFile.value) {
+                            // con't update current file without rebuilding audio source.
+                            // user should remove duplicate first before uploading.
+                            audioFiles.value[existing] = audioFile;
+                        }
+                    }
+                };
+                urlFr.readAsDataURL(file);
+            }
+        });
     }
 }
 
@@ -224,12 +307,49 @@ function onResetEqClicked() {
 
 #app {
   height: 100vh;
+  display: flex;
+  flex-flow:column;
 }
 
 #topPanel {
   min-height: 40px;
   height: 5%;
   width: 100%;
+}
+
+#bottomPanel {
+    flex: auto;
+    display: flex;
+    flex-flow: row;
+}
+
+#playlist {
+    height: 100%;
+    min-width: 2in;
+    max-width: 4in;
+    width: 25%;
+    background-color: black;
+}
+
+#visContainer {
+    flex: auto;
+}
+
+#visualizer {
+    height: 100%;
+    width: 100%;
+    position: absolute;
+    bottom: 0;
+    left: 0;
+}
+
+#visContainer svg{
+  display: block;
+  pointer-events: none;
+}
+
+#visContainer svg * {
+  pointer-events: all;
 }
 
 #chooser,
@@ -306,21 +426,8 @@ function onResetEqClicked() {
   pointer-events: none;
 }
 
-#visualizer {
-  height: 95%;
-  width: 100%;
-  position: absolute;
-  bottom: 0;
-  left: 0;
-}
-
-#visualizer svg{
-  display: block;
-  pointer-events: none;
-}
-
-#visualizer svg * {
-  pointer-events: all;
+.flexColumn {
+    flex-direction: column;
 }
 
 #metadata {
@@ -333,6 +440,26 @@ function onResetEqClicked() {
   font-family: Lato;
   font-size: 30px;
   color: white;
+  display: grid;
+  height: min-content;
+  grid-template-columns: auto auto;
+}
+
+#pictureFrame {
+    height: 100%;
+}
+
+#picture {
+    position: absolute;
+    vertical-align: middle;
+    max-width: 100%;
+    max-height: 100%;
+    bottom: 0;
+    left: 0;
+}
+
+#textdata{
+    padding-right: 20px;
 }
 
 #time {

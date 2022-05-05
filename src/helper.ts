@@ -1,4 +1,5 @@
 import * as d3 from 'd3';
+import type { DirectiveBinding, ObjectDirective } from 'vue';
 
 export const centerFreqs = [53.8, 64.6, 75.4, 88.8, 102.3, 118.4, 140, 164.2, 191.1, 223.4, 261.1,
     306.8, 360.7, 419.9, 492.6, 576, 672.9, 788.7, 923.2, 1079.4, 1262.4, 1477.7,
@@ -20,3 +21,13 @@ export const highShelfFreq = 23051.3;
 export function secondsFormat(seconds: number) {
     return `${Math.floor(seconds / 60)}:${d3.format('02d')(Math.floor(seconds % 60))}`;
 }
+
+export const squareDirective: ObjectDirective = {
+    updated(el, binding: DirectiveBinding) {
+        if (binding.value === 'height') {
+            el.style.width = `${el.parentElement.offsetHeight}px`;
+        } else if (el.style.height) {
+            el.style.height = `${el.parentElement.offsetWidth}px`;
+        }
+    }
+};

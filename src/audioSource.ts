@@ -31,11 +31,12 @@ export class AudioSource {
     onended: () => void;
     mute: boolean;
 
-    public constructor(buffer: AudioBuffer, audioContext: AudioContext, onended: () => void, mute = false) {
+    public constructor(buffer: AudioBuffer, audioContext: AudioContext, onended: () => void, mute = false, volume = 1) {
         this.audioContext = audioContext;
         this.buffer = buffer;
         this.onended = onended;
         this.mute = mute;
+        this.volume = volume;
 
         this.freqBins = helper.freqBins;
 

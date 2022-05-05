@@ -63,14 +63,13 @@ const props = defineProps<{
     invert: boolean;
 }>();
 
-function getEQ(index: number) {
-    return props.eqNodes.length > index ? props.eqNodes[index] : null;
-}
-
 const emit = defineEmits<{
     (e: 'change', event: { gain: number, index: number }): void
 }>();
 
+function getEQ(index: number) {
+    return props.eqNodes.length > index ? props.eqNodes[index] : null;
+}
 const yScale: Ref<ScaleLinear<number, number, never>> = ref(d3.scaleLinear()
     .domain([0, 255])
     .range([0, props.height]));

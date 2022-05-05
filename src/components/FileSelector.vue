@@ -7,6 +7,7 @@
                 ref="audioFile"
                 type="file"
                 accept="audio/*"
+                multiple="true"
                 @change="onFileChange"
             >
         </label>
