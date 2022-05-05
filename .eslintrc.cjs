@@ -8,4 +8,9 @@ module.exports = {
     env: {
         'vue/setup-compiler-macros': true,
     },
+    rules: {
+        'vue/html-self-closing': ['error', {
+            svg: 'any',
+        }]
+    }
 };

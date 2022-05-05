@@ -20,7 +20,6 @@
 </template>
 
 <script setup lang="ts">
-import * as d3 from 'd3';
 import { ref, watch, type Ref } from 'vue';
 import type { AudioSource } from '@/audioSource';
 import FreqSeries from './FreqSeries.vue';
@@ -42,20 +41,25 @@ const props = defineProps<{
 
 const emit = defineEmits<{
     (e: 'change', event: { gain: number, index: number }): void
+    (e: 'changeTime', time: string): void
 }>();
 
 const freqArray: Ref<number[]> = ref([]);
 const stableFreqArray: Ref<number[]> = ref([]);
+let lastTime = '--:--';
 
 function refreshArray() {
     if (props.audioSource && props.audioSource.playing) {
         freqArray.value = props.audioSource.getFreqArray();
 
-        // This is more reliable than trying to make vue update through refs every second.
-        d3.select('#currentTime').text(helper.secondsFormat((Date.now() - props.audioSource.getStartTime()) / 1000));
+        const seconds = helper.secondsFormat((Date.now() - props.audioSource.getStartTime()) / 1000);
+        if (lastTime !== seconds) {
+            lastTime = seconds;
+            emit('changeTime', seconds);
+        }
     }
 
-    if (props.audioStableSource) {
+    if (props.audioStableSource && props.audioStableSource.playing) {
         stableFreqArray.value = props.audioStableSource.getFreqArray();
     }
 
@@ -69,18 +73,6 @@ function refreshArray() {
 watch(() => props.playing, (newValue, oldvalue) => {
     if (newValue && !oldvalue) {
         refreshArray();
-    }
-});
-
-watch(() => props.eqNodes, () => {
-    if (freqArray.value) {
-        // change each value in freq array so it is greater than
-        // 0 so vue updates correctly
-        freqArray.value.forEach((x, i, arr) => {
-            if (x === 0) {
-                arr[i] = 1;
-            }
-        });
     }
 });
 </script>

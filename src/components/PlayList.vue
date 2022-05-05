@@ -21,7 +21,14 @@
                             @keydown="emit('remove', element)"
                             @click.stop
                         >
-                            X
+                            <InlineSvg
+                                :src="Close"
+                                alt="close"
+                                fill="red"
+                                :height="24"
+                                :width="24"
+                                viewBox="0 0 48 48"
+                            />
                         </div>
                     </div>
                     <div class="flexRow">
@@ -35,24 +42,14 @@
                 </div>
             </div>
         </template>
-        <!-- <template #header>
-            <button
-                class="header"
-                @click="emit('add')"
-            >
-                + Upload A File
-            </button>
-        </template> -->
-        <!-- <div
-            v-for="(file, i) in files"
-            :key="file.name + '-' + i"
-        /> -->
     </draggable>
 </template>
 
 <script setup lang="ts">
 import draggable from 'vuedraggable';
 import { ref, watch, type Ref, type WatchOptions } from 'vue';
+import Close from '@/assets/Close.svg';
+import InlineSvg from 'vue-inline-svg';
 import type { AudioFile } from '@/models/audioFile';
 import * as helper from '../helper';
 
@@ -68,7 +65,6 @@ const modelFiles: Ref<AudioFile[]> = ref([]);
 const emit = defineEmits<{
     (e: 'select', file: AudioFile): void
     (e: 'remove', file: AudioFile): void
-    // (e: 'add'): void
 }>();
 
 watch(() => props.files, () => {
@@ -133,8 +129,4 @@ watch(() => props.removedFiles, () => {
 .item:hover .delete {
     visibility: visible;
 }
-
-/* .header:active {
-
-} */
 </style>

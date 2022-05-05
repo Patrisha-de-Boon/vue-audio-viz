@@ -1,7 +1,11 @@
 <template>
     <div id="uploadButton">
         <label for="audioFile">
-            {{ text }}
+            <InlineSvg
+                :src="src"
+                alt="add"
+                fill="white"
+            />
             <input
                 id="audioFile"
                 ref="audioFile"
@@ -15,12 +19,14 @@
 </template>
 
 <script setup lang="ts">
+import InlineSvg from 'vue-inline-svg';
+
 const emit = defineEmits<{
     (e: 'change', file: FileList | null): void
 }>();
 
 defineProps<{
-  text: string;
+  src: any;
 }>();
 
 function onFileChange(event: Event) {

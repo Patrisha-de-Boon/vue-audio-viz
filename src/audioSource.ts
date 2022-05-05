@@ -44,10 +44,14 @@ export class AudioSource {
         this.analyser = this.audioContext.createAnalyser();
         this.gainNode = this.audioContext.createGain();
 
-        this.setBufferSource(true);
+        this.setBufferSource(null, true);
     }
 
-    setBufferSource(fromConstructor = false) {
+    setBufferSource(newBuffer: AudioBuffer | null = null, fromConstructor = false) {
+        if (newBuffer) {
+            this.buffer = newBuffer;
+        }
+
         if (fromConstructor) {
             const shelfValues = getShelfValues(this.audioContext);
             this.gainNode.connect(shelfValues.lowshelf);
@@ -77,11 +81,9 @@ export class AudioSource {
             this.analyser.smoothingTimeConstant = 0;
             this.analyser.maxDecibels = -10;
         } else {
-            // These are seperated so eslint can see the definitions in the constructor
             this.bufferSource = this.audioContext.createBufferSource();
-            // this.analyser = this.audioContext.createAnalyser();
-            // this.gainNode = this.audioContext.createGain();
         }
+
         this.bufferSource.connect(this.gainNode);
         this.bufferSource.buffer = this.buffer;
 

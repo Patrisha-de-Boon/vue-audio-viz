@@ -1,5 +1,6 @@
 <template>
     <svg
+        id="slider"
         :width="width"
         :height="height"
     >
@@ -21,21 +22,47 @@
             :width="currentWidth"
             :height="height"
         />
-        <text
-            className="volumeLeft"
-            :x="10"
-            :y="height / 2"
-        >0</text>
-        <text
-            className="volumeRight"
-            :x="width - 10"
-            :y="height / 2"
-        >100</text>
     </svg>
+    <div
+        id="volumeIcons"
+        class="noselect"
+    >
+        <div
+            id="volumeDown"
+            class="iconContainer noselect"
+        >
+            <InlineSvg
+                :src="VolumeDown"
+                class="noselect"
+                alt="reset eq"
+                :width="36"
+                :height="36"
+                viewBox="0 0 48 48"
+                fill="white"
+            />
+        </div>
+        <div
+            id="volumeUp"
+            class="iconContainer noselect"
+        >
+            <InlineSvg
+                :src="VolumeUp"
+                class="noselect"
+                alt="reset eq"
+                :width="36"
+                :height="36"
+                viewBox="0 0 48 48"
+                fill="white"
+            />
+        </div>
+    </div>
 </template>
 
 <script setup lang="ts">
 import * as d3 from 'd3';
+import VolumeDown from '@/assets/VolumeDown.svg';
+import VolumeUp from '@/assets/VolumeUp.svg';
+import InlineSvg from 'vue-inline-svg';
 
 const emit = defineEmits<{
     (e: 'change', volume: number): void
@@ -67,7 +94,46 @@ function mouseMove(e: MouseEvent) {
 </script>
 
 <style scoped>
-.volumeRight {
-  text-anchor: end;
+svg {
+  cursor: pointer;
+}
+
+#currentVolume {
+  pointer-events: none;
+}
+
+#slider {
+    display: block;
+}
+
+#volumeIcons {
+    position: absolute !important;
+    width: 100%;
+    height: 100%;
+    top: 0;
+    right: 0;
+    pointer-events: none;
+}
+
+#volumeDown {
+    left: 20px;
+}
+
+#volumeUp {
+    right: 20px;
+}
+
+.iconContainer {
+    position: absolute;
+    height: 100%;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+}
+
+#volumeIcons svg {
+    position: relative;
+    display: block;
+    margin: auto;
 }
 </style>
