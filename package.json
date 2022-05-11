@@ -11,6 +11,8 @@
   "dependencies": {
     "@vitejs/plugin-vue": "^2.3.1",
     "d3": "^7.4.4",
+    "d3-timer": "^3.0.1",
+    "lodash": "^4.17.21",
     "parse-audio-metadata": "^1.1.0",
     "vite": "^2.9.5",
     "vue": "^3.2.33",
@@ -20,6 +22,7 @@
   "devDependencies": {
     "@dha/eslint-config-vue3-ts": "^0.1.1",
     "@types/d3": "^7.1.0",
+    "@types/lodash": "^4.14.182",
     "@types/node": "^16.11.27",
     "@vue/eslint-config-prettier": "^7.0.0",
     "@vue/eslint-config-typescript": "^10.0.0",

@@ -17,6 +17,7 @@
         </div>
     </div>
     <div
+        v-if="currentFile?.picture"
         id="pictureFrame"
         v-square-directive="'height'"
     >
@@ -31,8 +32,8 @@
 
 <script setup lang="ts">
 import type { AudioFile } from '@/models/audioFile';
-import * as helper from '../helper';
-import { squareDirective as vSquareDirective } from '../helper';
+import * as helper from '../util/helper';
+import { squareDirective as vSquareDirective } from '../util/helper';
 
 defineProps<{
   currentFile: AudioFile | null;

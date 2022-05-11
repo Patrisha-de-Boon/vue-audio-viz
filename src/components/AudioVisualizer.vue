@@ -23,7 +23,8 @@
 import { ref, watch, type Ref } from 'vue';
 import type { AudioSource } from '@/audioSource';
 import FreqSeries from './FreqSeries.vue';
-import * as helper from '../helper';
+import * as helper from '../util/helper';
+import type { AudioFile } from '@/models/audioFile';
 
 const props = defineProps<{
   height: number;
@@ -35,6 +36,7 @@ const props = defineProps<{
   audioSource: AudioSource | null;
   audioStableSource: AudioSource | null;
   playing: boolean;
+  selectedFile: AudioFile | null;
   eqNodes: BiquadFilterNode[];
   invert: boolean;
 }>();
@@ -49,7 +51,7 @@ const stableFreqArray: Ref<number[]> = ref([]);
 let lastTime = '--:--';
 
 function refreshArray() {
-    if (props.audioSource && props.audioSource.playing) {
+    if (props.audioSource && (props.audioSource.playing || !props.audioSource.pauseTime)) {
         freqArray.value = props.audioSource.getFreqArray();
 
         const seconds = helper.secondsFormat((Date.now() - props.audioSource.getStartTime()) / 1000);
@@ -59,7 +61,7 @@ function refreshArray() {
         }
     }
 
-    if (props.audioStableSource && props.audioStableSource.playing) {
+    if (props.audioStableSource && (props.audioStableSource.playing || !props.audioStableSource.pauseTime)) {
         stableFreqArray.value = props.audioStableSource.getFreqArray();
     }
 
@@ -74,5 +76,9 @@ watch(() => props.playing, (newValue, oldvalue) => {
     if (newValue && !oldvalue) {
         refreshArray();
     }
+});
+
+watch(() => props.selectedFile, () => {
+    refreshArray();
 });
 </script>

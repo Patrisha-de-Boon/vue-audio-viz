@@ -1,5 +1,5 @@
 import * as d3 from 'd3';
-import * as helper from './helper';
+import * as helper from './util/helper';
 
 export function getShelfValues(audioContext: AudioContext) {
     const lowshelf = audioContext.createBiquadFilter();
@@ -44,14 +44,10 @@ export class AudioSource {
         this.analyser = this.audioContext.createAnalyser();
         this.gainNode = this.audioContext.createGain();
 
-        this.setBufferSource(null, true);
+        this.setBufferSource(true);
     }
 
-    setBufferSource(newBuffer: AudioBuffer | null = null, fromConstructor = false) {
-        if (newBuffer) {
-            this.buffer = newBuffer;
-        }
-
+    setBufferSource(fromConstructor = false) {
         if (fromConstructor) {
             const shelfValues = getShelfValues(this.audioContext);
             this.gainNode.connect(shelfValues.lowshelf);
@@ -122,8 +118,18 @@ export class AudioSource {
         this.setGain(this.volume);
     }
 
-    play() {
+    setBuffer(buffer: AudioBuffer) {
+        this.buffer = buffer;
+        this.pauseTime = 0; // can't resume from pause since buffer has changed
+    }
+
+    play(pausetime: number | null = null) {
+        if (pausetime != null) {
+            this.pauseTime = pausetime;
+        }
+
         if (!this.playing) {
+            this.playing = true;
             if (this.ended) {
                 // can't call bufferSource.start more than once on the same buffer source.
                 this.setBufferSource();
@@ -138,18 +144,17 @@ export class AudioSource {
             }
 
             this.setGain(this.volume);
-            this.pauseTime = 0;
-            this.playing = true;
             this.ended = false;
+            this.pauseTime = 0;
         }
     }
 
     pause() {
+        this.ended = true;
         if (this.playing) {
-            this.ended = true;
             this.playing = false;
-            this.bufferSource.stop(0);
             this.pauseTime = Date.now() - this.startTime;
+            this.bufferSource.stop(0);
         }
     }
 
@@ -170,16 +175,17 @@ export class AudioSource {
             return freqArray;
         }
 
-        return new Array(this.analyser.frequencyBinCount).fill(0);
+        return new Array(this.freqBins.length).fill(0);
     }
 
     stop() {
         if (this.playing) {
             this.playing = false;
-            this.ended = true;
             this.bufferSource.stop(0);
-            this.startTime = 0;
         }
+        this.ended = true;
+        this.startTime = 0;
+        this.pauseTime = 0;
         d3.select('#currentTime').text('--:--');
     }
 

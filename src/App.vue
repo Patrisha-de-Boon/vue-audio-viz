@@ -1,58 +1,16 @@
 <template>
     <header id="topPanel">
-        <div
-            id="chooser"
-            class="noselect"
-        >
-            <FileSelector
-                :src="Add"
-                @change="onFileChange"
-            />
-        </div>
-        <div
-            id="play"
-            class="noselect"
-        >
-            <button
-                id="playButton"
-                :disabled="!currentSource"
-                @click="onPlayClicked"
-            >
-                <InlineSvg
-                    :src="playing ? Pause : PlayArrow"
-                    :alt="playing ? 'Pause' : 'Play'"
-                    :fill="currentSource ? 'white' : 'grey'"
-                />
-            </button>
-        </div>
-        <div
-            id="resetEQ"
-            class="noselect"
-        >
-            <button
-                id="resetEQButton"
-                :disabled="!currentSource"
-                @click="onResetEqClicked"
-            >
-                <InlineSvg
-                    :src="GraphicEqualizer"
-                    alt="reset eq"
-                    :fill="currentSource ? 'white' : 'grey'"
-                />
-            </button>
-        </div>
-        <div
-            id="volume"
-            class="noselect"
-        >
-            <VolumeSlider
-                :width="((d3.select('#topPanel').node() as Element)?.getBoundingClientRect().width ?? 0) / 2"
-                :height="(d3.select('#topPanel').node() as Element)?.getBoundingClientRect().height ?? 0"
-                :current-width="volumeWidth"
-                :fill="highColour"
-                @change="onVolumeChange"
-            />
-        </div>
+        <ControlPanel
+            :current-source="currentSource"
+            :high-colour="highColour"
+            :playing="playing"
+            :volume-width="volumeWidth"
+            :eq-unchanged="eqUnchanged"
+            @volume-change="onVolumeChange"
+            @files-change="onFileChange"
+            @play-click="onPlayClicked"
+            @reset-click="onResetEqClicked"
+        />
     </header>
 
     <main
@@ -88,6 +46,7 @@
                 :invert="true"
                 :playing="playing"
                 :eq-nodes="eqNodes"
+                :selected-file="currentFile"
                 @change="onEqChange"
                 @change-time="onTimeChange"
             />
@@ -107,18 +66,12 @@
 <script setup lang="ts">
 import * as d3 from 'd3';
 import { ref, onMounted, type Ref } from 'vue';
-import PlayArrow from '@/assets/PlayArrow.svg';
-import Add from '@/assets/Add.svg';
-import GraphicEqualizer from '@/assets/GraphicEqualizer.svg';
-import Pause from '@/assets/Pause.svg';
-import InlineSvg from 'vue-inline-svg';
-import FileSelector from './components/FileSelector.vue';
 import AudioVisualizer from './components/AudioVisualizer.vue';
 import { AudioSource } from './audioSource';
-import VolumeSlider from './components/VolumeSlider.vue';
 import type { AudioFile } from './models/audioFile';
 import PlayList from './components/PlayList.vue';
 import MetaData from './components/MetaData.vue';
+import ControlPanel from './components/ControlPanel.vue';
 
 let parseAudioMetadata: ((file: any) => Promise<any>) | null = null;
 const highColour = 'rgb(149,101,196)';
@@ -133,6 +86,7 @@ const currentSource: Ref<AudioSource | null> = ref(null);
 const currentStableSource: Ref<AudioSource | null> = ref(null);
 const currentFile: Ref<AudioFile | null> = ref(null);
 const playing = ref(false);
+const eqUnchanged = ref(true);
 const eqNodes: Ref<BiquadFilterNode[]> = ref([]);
 const audioFiles: Ref<AudioFile[]> = ref([]);
 const removedFiles: Ref<AudioFile[]> = ref([]);
@@ -155,7 +109,18 @@ function onTimeChange(time: string) {
 
 function onEqChange(event: {gain: number, index: number}) {
     if (event && (event.gain || event.gain === 0) && event.index >= 0 && eqNodes.value && eqNodes.value.length > event.index) {
-        eqNodes.value[event.index].gain.value = event.gain;
+        // eqNodes.value[event.index].gain.value = event.gain;
+        const newNodes: BiquadFilterNode[] = [];
+        eqNodes.value.forEach((eq, index) => {
+            if (index === event.index) {
+                eq.gain.value = event.gain;
+            }
+            newNodes.push(eq);
+        });
+        eqNodes.value = newNodes;
+        if (eqUnchanged.value) {
+            eqUnchanged.value = false;
+        }
     }
 }
 
@@ -163,6 +128,9 @@ function onVolumeChange(volume: number) {
     volumeWidth.value = (d3.select('#topPanel').node() as Element).getBoundingClientRect().width / 2 * volume ?? 0;
     if (currentSource.value) {
         currentSource.value.setVolume(volume);
+    }
+    if (currentStableSource.value) {
+        currentStableSource.value.setVolume(volume);
     }
 }
 
@@ -180,12 +148,14 @@ function onPlayClicked() {
         }
         playing.value = false;
     } else {
+        let pauseTime = null;
         if (currentSource.value) {
+            pauseTime = currentSource.value.pauseTime;
             currentSource.value.play();
             eqNodes.value = currentSource.value.eqNodes;
         }
         if (currentStableSource.value) {
-            currentStableSource.value.play();
+            currentStableSource.value.play(pauseTime);
         }
         playing.value = true;
     }
@@ -193,17 +163,12 @@ function onPlayClicked() {
 
 function onFileSelect(file: AudioFile | null) {
     if (file == null) {
-        if (currentSource.value !== undefined && currentSource.value !== null && currentSource.value.isPlaying()) {
-            currentSource.value.bufferSource.onended = function () {
-                currentSource.value?.end();
-                currentStableSource.value?.end();
-            };
+        if (currentSource.value && currentSource.value.isPlaying()) {
             currentSource.value.stop();
             currentStableSource.value?.stop();
+            playing.value = false;
         }
     } else if (currentFile.value !== file) {
-        currentFile.value = file;
-
         const fr = new FileReader();
         fr.onload = function (e) {
             if (e && e.target && e.target.result && audioContext.value) {
@@ -211,19 +176,33 @@ function onFileSelect(file: AudioFile | null) {
                     d3.selectAll('#time, #currentTime, #totalTime').style('display', 'inline');
 
                     if (currentSource.value) {
+                        let numToEnd = currentSource.value.isPlaying() ? 1 : 0;
+                        let numEnded = 0;
+                        playing.value = false;
+                        if (currentStableSource.value) {
+                            currentStableSource.value.setBuffer(buffer);
+                            if (currentStableSource.value.isPlaying()) {
+                                numToEnd += 1;
+                                currentStableSource.value.bufferSource.onended = function () {
+                                    numEnded += 1;
+                                    if (numEnded >= numToEnd) {
+                                        onPlayClicked();
+                                    }
+                                };
+                            }
+                            currentStableSource.value.stop();
+                        }
+
+                        currentSource.value.setBuffer(buffer);
                         if (currentSource.value.isPlaying()) {
                             currentSource.value.bufferSource.onended = function () {
-                                currentSource.value?.end();
-                                currentSource.value?.setBufferSource(buffer);
-
-                                currentStableSource.value?.end();
-                                currentStableSource.value?.setBufferSource(buffer);
-                                playing.value = false;
-                                onPlayClicked();
+                                numEnded += 1;
+                                if (numEnded >= numToEnd) {
+                                    onPlayClicked();
+                                }
                             };
+                            currentSource.value.stop();
                         }
-                        currentSource.value.stop();
-                        currentStableSource.value?.stop();
                     } else {
                         const audioSource = new AudioSource(buffer, audioContext.value as AudioContext, () => {
                             if (audioSource.pauseTime === 0) {
@@ -242,6 +221,7 @@ function onFileSelect(file: AudioFile | null) {
                         playing.value = false;
                         onPlayClicked();
                     }
+                    currentFile.value = file;
                 });
             }
         };
@@ -292,16 +272,12 @@ function onResetEqClicked() {
         newNodes.push(eq);
     });
     eqNodes.value = newNodes;
+    eqUnchanged.value = true;
 }
 </script>
 
 <style>
 @import "./assets/base.css";
-
-.fullscreen {
-    height: 100%;
-    widows: 100%;
-}
 
 #app {
   height: 100vh;
@@ -348,57 +324,6 @@ function onResetEqClicked() {
 
 #visContainer svg * {
   pointer-events: all;
-}
-
-#chooser,
-#resetEQ,
-#play {
-  display: flex;
-  height: 100%;
-  vertical-align: top;
-  float: left;
-  clear: none;
-}
-
-#uploadButton,
-#resetEQ,
-#play {
-  display: flex;
-  justify-content: center;
-  cursor: pointer;
-}
-
-#chooser label {
-  align-self: center;
-  padding: 0 10px;
-  font-family: Lato;
-  font-size: 20px;
-  line-height: 19px;
-  color: white;
-  cursor: pointer;
-}
-
-#resetEQButton,
-#playButton {
-    font-size: 20px;
-    font-family: Lato;
-    background-color: transparent;
-    padding: 0 10px;
-    cursor: pointer;
-    border: 0;
-    color: white;
-}
-
-#chooser:hover,
-#resetEQ:hover,
-#play:hover {
-  background-color: rgb(149, 101, 196) !important;
-}
-
-#chooser:active,
-#resetEQ:active,
-#play:active {
-  background-color: rgb(109, 58, 171);
 }
 
 #volume {

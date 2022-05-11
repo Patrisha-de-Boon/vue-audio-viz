@@ -51,7 +51,7 @@ import { ref, watch, type Ref, type WatchOptions } from 'vue';
 import Close from '@/assets/Close.svg';
 import InlineSvg from 'vue-inline-svg';
 import type { AudioFile } from '@/models/audioFile';
-import * as helper from '../helper';
+import * as helper from '../util/helper';
 
 const props = defineProps<{
     files: AudioFile[],

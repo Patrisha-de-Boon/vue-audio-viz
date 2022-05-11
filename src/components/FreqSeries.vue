@@ -3,7 +3,7 @@
         <g v-if="invert">
             <StandardBar
                 v-for="(freq, i) in stableFreqArray"
-                :key="i + '-' + freq"
+                :key="i"
                 :height="yScale(freq) ?? 0"
                 :width="barWidth"
                 :x="xScale(i) ?? 0"
@@ -16,7 +16,7 @@
         <g>
             <StandardBar
                 v-for="(freq, i) in freqArray"
-                :key="i + '-' + freq + '-' + eqNodes[i]"
+                :key="i"
                 :height="yScale(freq) ?? 0"
                 :width="barWidth"
                 :x="xScale(i) ?? 0"
@@ -35,7 +35,7 @@
                 :key="i"
                 :height="height ?? 0"
                 :width="barWidth"
-                :x="xScale(i) ?? 1"
+                :x="xScale(i) ?? 0"
                 :y-scale="eqYScale"
                 :chart-height="height"
                 :fill="eqColour"
@@ -51,7 +51,7 @@ import { watch, ref, type Ref, onMounted, onUnmounted } from 'vue';
 import type { ScaleBand, ScaleLinear } from 'd3';
 import StandardBar from './StandardBar.vue';
 import EqualizerBar from './EqualizerBar.vue';
-import * as helper from '../helper';
+import * as helper from '../util/helper';
 
 const props = defineProps<{
     freqArray: number[];
@@ -77,7 +77,11 @@ const xScale: Ref<ScaleBand<number>> = ref(d3.scaleBand<number>()
 const barWidth: Ref<number> = ref(xScale.value.bandwidth() ?? 0);
 
 watch(() => props.eqNodes, (newValue) => {
-    currentEqNodes.value = newValue;
+    if (newValue.length > helper.freqBins.length - 1) {
+        currentEqNodes.value = newValue.slice(0, helper.freqBins.length - 1);
+    } else {
+        currentEqNodes.value = newValue;
+    }
 });
 
 const eqYScale: Ref<ScaleLinear<number, number, never>> = ref(d3.scaleLinear()
